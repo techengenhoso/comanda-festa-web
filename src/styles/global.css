@@ -189,3 +189,15 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .consumption-menu { margin-bottom: 14px; }
 .registered-toggle { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+@media (max-width: 520px) {
+  .section-header { flex-direction: column; }
+  .section-header > div + * { width: 100%; justify-content: stretch; }
+  .section-header > div + * .btn { flex: 1 1 100%; }
+  .card { flex-direction: column; align-items: stretch; }
+  .card.compact { align-items: stretch; }
+  .card .btn { width: 100%; }
+  .detail-list > div { flex-direction: column; gap: 4px; }
+  .detail-list strong { text-align: left; word-break: break-word; }
+  .modal-actions .btn { flex: 1 1 100%; }
+}

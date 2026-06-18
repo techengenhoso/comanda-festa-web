@@ -66,6 +66,19 @@ export function normalizeConsumption(value: Partial<Consumption>): Consumption {
 
 export function normalizeParty(value: Partial<Party>): Party {
   const date = normalizeDateToIso(String(value.date ?? '')) ?? normalizeDateToIso(new Intl.DateTimeFormat('pt-BR').format(new Date())) ?? ''
+  const tabs = sortTabs(Array.isArray(value.tabs) ? value.tabs.map(normalizeTab) : [])
+  const menu = sortMenu(Array.isArray(value.menu) ? value.menu.map(normalizeMenuItem) : [])
+  const tabIds = new Set(tabs.map((tab) => tab.id))
+  const menuById = new Map(menu.map((item) => [item.id, item]))
+  const consumptions = Array.isArray(value.consumptions)
+    ? value.consumptions
+      .map(normalizeConsumption)
+      .filter((consumption) => tabIds.has(consumption.tabId) && menuById.has(consumption.menuItemId))
+      .map((consumption) => {
+        const menuItem = menuById.get(consumption.menuItemId)
+        return menuItem ? { ...consumption, itemName: menuItem.name, price: menuItem.price } : consumption
+      })
+    : []
 
   return {
     id: value.id ?? createId(),
@@ -75,9 +88,9 @@ export function normalizeParty(value: Partial<Party>): Party {
     active: Boolean(value.active),
     archived: Boolean(value.archived),
     createdAt: value.createdAt ?? new Date().toISOString(),
-    tabs: sortTabs(Array.isArray(value.tabs) ? value.tabs.map(normalizeTab) : []),
-    menu: sortMenu(Array.isArray(value.menu) ? value.menu.map(normalizeMenuItem) : []),
-    consumptions: Array.isArray(value.consumptions) ? value.consumptions.map(normalizeConsumption) : [],
+    tabs,
+    menu,
+    consumptions,
   }
 }
 
