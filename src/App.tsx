@@ -12,7 +12,7 @@ import { LIMITS, normalizeAppData, sortMenu, sortTabs } from './utils/normalizat
 import { loadAppData, saveAppData } from './utils/storage'
 import './styles/global.css'
 
-type ModalState = 'party' | 'tab' | 'menu' | 'details' | null
+type ModalState = 'party' | 'tab' | 'menu' | 'partyDetails' | 'tabDetails' | 'menuDetails' | null
 type PartyForm = Pick<Party, 'name' | 'date' | 'notes'>
 type TabForm = Pick<Tab, 'code' | 'nfcCard' | 'minimumSpend'>
 type MenuForm = Pick<MenuItem, 'name' | 'price'>
@@ -32,9 +32,10 @@ function App() {
   const [partyForm, setPartyForm] = useState(newParty)
   const [tabForm, setTabForm] = useState(newTab)
   const [menuForm, setMenuForm] = useState(newMenu)
-  const [selectedMenu, setSelectedMenu] = useState('')
-  const [detailTitle, setDetailTitle] = useState('')
-  const [detailRows, setDetailRows] = useState<Array<{ label: string; value: string }>>([])
+  const [selectedPartyDetailId, setSelectedPartyDetailId] = useState<string | null>(null)
+  const [selectedTabDetailId, setSelectedTabDetailId] = useState<string | null>(null)
+  const [selectedMenuDetailId, setSelectedMenuDetailId] = useState<string | null>(null)
+  const [showRegistered, setShowRegistered] = useState(false)
   const [toast, setToast] = useState('')
 
   useEffect(() => saveAppData(appData), [appData])
@@ -47,12 +48,16 @@ function App() {
   const activeParty = parties.find((party) => party.id === appData.selectedPartyId && party.active && !party.archived) ?? parties.find((party) => party.active && !party.archived)
   const visibleParties = showArchived ? parties : parties.filter((party) => !party.archived)
   const selectedTab = appData.selectedTabId ?? ''
+  const selectedTabConsumptions = activeParty?.consumptions.filter((item) => item.tabId === selectedTab) ?? []
+  const selectedPartyDetail = parties.find((party) => party.id === selectedPartyDetailId)
+  const selectedTabDetail = activeParty?.tabs.find((tab) => tab.id === selectedTabDetailId)
+  const selectedMenuDetail = activeParty?.menu.find((item) => item.id === selectedMenuDetailId)
   const activeTabs = sortTabs(activeParty?.tabs.filter((tab) => tab.active) ?? [])
   const activeMenu = sortMenu(activeParty?.menu.filter((item) => item.active) ?? [])
 
   const totals = {
     consumed: activeParty?.consumptions.reduce((sum, item) => sum + item.price, 0) ?? 0,
-    minimum: activeParty?.tabs.reduce((sum, tab) => sum + tab.minimumSpend, 0) ?? 0,
+    minimum: activeParty?.tabs.reduce((sum, tab) => sum + Math.max(tab.minimumSpend - activeParty.consumptions.filter((item) => item.tabId === tab.id).reduce((tabSum, item) => tabSum + item.price, 0), 0), 0) ?? 0,
   }
 
   function updateParty(partyId: string, updater: (party: Party) => Party) {
@@ -65,10 +70,19 @@ function App() {
     setModal('party')
   }
 
-  function openDetails(title: string, rows: Array<{ label: string; value: string }>) {
-    setDetailTitle(title)
-    setDetailRows(rows)
-    setModal('details')
+  function openPartyDetails(partyId: string) {
+    setSelectedPartyDetailId(partyId)
+    setModal('partyDetails')
+  }
+
+  function openTabDetails(tabId: string) {
+    setSelectedTabDetailId(tabId)
+    setModal('tabDetails')
+  }
+
+  function openMenuDetails(itemId: string) {
+    setSelectedMenuDetailId(itemId)
+    setModal('menuDetails')
   }
 
   function saveParty(event: FormEvent) {
@@ -93,6 +107,13 @@ function App() {
     setModal('tab')
   }
 
+  function deleteParty(partyId: string) {
+    const party = parties.find((item) => item.id === partyId)
+    if (!party?.archived) return
+    setAppData((current) => normalizeAppData({ ...current, parties: current.parties.filter((p) => p.id !== partyId) }))
+    setModal(null)
+  }
+
   function saveTab(event: FormEvent) {
     event.preventDefault()
     if (!activeParty || !tabForm.code.trim()) return
@@ -109,17 +130,16 @@ function App() {
   function saveMenu(event: FormEvent) {
     event.preventDefault()
     if (!activeParty || !menuForm.name.trim()) return
-    updateParty(activeParty.id, (party) => ({ ...party, menu: editingId ? party.menu.map((item) => item.id === editingId ? { ...item, ...menuForm, name: menuForm.name.trim().slice(0, LIMITS.menuItemName) } : item) : [...party.menu, { id: id(), ...menuForm, name: menuForm.name.trim().slice(0, LIMITS.menuItemName), active: true, createdAt: new Date().toISOString() }] }))
+    const payload = { ...menuForm, name: menuForm.name.trim().slice(0, LIMITS.menuItemName) }
+    updateParty(activeParty.id, (party) => ({
+      ...party,
+      menu: editingId ? party.menu.map((item) => item.id === editingId ? { ...item, ...payload } : item) : [...party.menu, { id: id(), ...payload, active: true, createdAt: new Date().toISOString() }],
+      consumptions: editingId ? party.consumptions.map((consumption) => consumption.menuItemId === editingId ? { ...consumption, itemName: payload.name, price: payload.price } : consumption) : party.consumptions,
+    }))
     setModal(null)
   }
 
-  function registerConsumption() {
-    if (!activeParty || !selectedTab || !selectedMenu) return
-    const item = activeParty.menu.find((menuItem) => menuItem.id === selectedMenu)
-    if (!item) return
-    updateParty(activeParty.id, (party) => ({ ...party, consumptions: [...party.consumptions, { id: id(), tabId: selectedTab, menuItemId: item.id, itemName: item.name, price: item.price, createdAt: new Date().toISOString() }] }))
-    setToast('Consumo registrado com sucesso!')
-  }
+
 
   const emptyActive = !activeParty
 
@@ -135,23 +155,26 @@ function App() {
         <div className="layout">
           <Nav current={section} disabled={emptyActive} onChange={setSection} />
           <div className="content">
-            {section === 'parties' && <Section title="Festas" subtitle="Gerencie eventos" actions={<><Button onClick={() => openPartyForm()}>Nova festa</Button><Button variant="secondary" onClick={() => setShowArchived((value) => !value)}>{showArchived ? 'Ocultar arquivadas' : 'Mostrar arquivadas'}</Button></>}>
-              {visibleParties.length === 0 ? <div className="empty-state"><strong>Nenhuma festa criada ainda</strong><p>Crie a primeira festa para liberar comandas, cardápios, consumo e saldos.</p></div> : <div className="grid-list">{visibleParties.map((party) => <article className="card" key={party.id}><div><h3>{party.name}</h3><p>{formatStoredDate(party.date)} • {party.notes || 'Sem observações'}</p><div className="badges"><span>{party.active ? 'Ativa' : 'Inativa'}</span>{party.archived && <span>Arquivada</span>}</div></div><div className="actions"><Button variant="secondary" onClick={() => openPartyForm(party)}>Editar</Button><Button variant="secondary" onClick={() => openDetails(party.name, [{ label: 'Data', value: formatStoredDate(party.date) }, { label: 'Status', value: party.active ? 'Ativa' : 'Inativa' }, { label: 'Comandas', value: String(party.tabs.length) }, { label: 'Itens', value: String(party.menu.length) }, { label: 'Observações', value: party.notes || 'Sem observações' }])}>Detalhes</Button><Button variant="secondary" onClick={() => setActiveParty(party.id, !party.active)} disabled={party.archived}>{party.active ? 'Desativar' : 'Ativar'}</Button><Button variant="secondary" onClick={() => updateParty(party.id, (p) => ({ ...p, archived: !p.archived, active: p.archived ? p.active : false }))}>{party.archived ? 'Desarquivar' : 'Arquivar'}</Button><Button variant="danger" onClick={() => setAppData((current) => normalizeAppData({ ...current, parties: current.parties.filter((p) => p.id !== party.id) }))}>Excluir</Button></div></article>)}</div>}
+            {section === 'parties' && <Section title="Festas" subtitle="Gerencie eventos" actions={<><Button onClick={() => openPartyForm()}>Criar festa</Button><Button variant="secondary" onClick={() => setShowArchived((value) => !value)}>{showArchived ? 'Ocultar festas arquivadas' : 'Mostrar festas arquivadas'}</Button></>}>
+              {visibleParties.length === 0 ? <div className="empty-state"><strong>Nenhuma festa criada ainda</strong><p>Crie a primeira festa para liberar comandas, cardápios, consumo e saldos.</p></div> : <div className="grid-list">{visibleParties.map((party) => <button className="card card-button" key={party.id} onClick={() => openPartyDetails(party.id)}><div><h3>{party.name}</h3><p>{formatStoredDate(party.date)}</p><div className="badges"><span>{party.active ? 'Ativa' : 'Inativa'}</span>{party.archived && <span>Arquivada</span>}</div></div></button>)}</div>}
             </Section>}
 
-            {section === 'tabs' && activeParty && <Section title="Comandas" subtitle={activeParty.name} actions={<Button onClick={() => openTabForm()}>Nova comanda</Button>}>{activeParty.tabs.length === 0 ? <div className="empty-state"><strong>Nenhuma comanda criada para esta festa</strong><p>Adicione comandas para registrar consumo e acompanhar saldos.</p></div> : <div className="grid-list">{activeParty.tabs.map((tab) => <article className="card" key={tab.id}><div><h3>{tab.code}</h3><p>NFC: {tab.nfcCard || 'não informado'} • Mínimo {formatCurrency(tab.minimumSpend)}</p><div className="badges"><span>{tab.active ? 'Ativa' : 'Inativa'}</span></div></div><div className="actions"><Button variant="secondary" onClick={() => openTabForm(tab)}>Editar</Button><Button variant="secondary" onClick={() => openDetails(`Comanda ${tab.code}`, [{ label: 'Cartão NFC', value: tab.nfcCard || 'Não informado' }, { label: 'Consumo mínimo', value: formatCurrency(tab.minimumSpend) }, { label: 'Status', value: tab.active ? 'Ativa' : 'Inativa' }])}>Detalhes</Button><Button variant="secondary" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, tabs: p.tabs.map((t) => t.id === tab.id ? { ...t, active: !t.active } : t) }))}>{tab.active ? 'Desativar' : 'Ativar'}</Button><Button variant="danger" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, tabs: p.tabs.filter((t) => t.id !== tab.id), consumptions: p.consumptions.filter((c) => c.tabId !== tab.id) }))}>Excluir</Button></div></article>)}</div>}</Section>}
+            {section === 'tabs' && activeParty && <Section title="Comandas" subtitle={activeParty.name} actions={<Button onClick={() => openTabForm()}>Criar comanda</Button>}>{activeParty.tabs.length === 0 ? <div className="empty-state"><strong>Nenhuma comanda criada para esta festa</strong><p>Adicione comandas para registrar consumo e acompanhar saldos.</p></div> : <div className="grid-list">{activeParty.tabs.map((tab) => <button className="card card-button" key={tab.id} onClick={() => openTabDetails(tab.id)}><div><h3>{tab.code}</h3><p>Mínimo {formatCurrency(tab.minimumSpend)}</p><div className="badges"><span>{tab.active ? 'Ativa' : 'Inativa'}</span></div></div></button>)}</div>}</Section>}
 
-            {section === 'menu' && activeParty && <Section title="Cardápios" subtitle={activeParty.name} actions={<Button onClick={() => openMenuForm()}>Novo item</Button>}>{activeParty.menu.length === 0 ? <div className="empty-state"><strong>Nenhum item criado para esta festa</strong><p>Monte o cardápio para começar a registrar consumo.</p></div> : <div className="grid-list">{activeParty.menu.map((item) => <article className="card" key={item.id}><div><h3>{item.name}</h3><p>{formatCurrency(item.price)}</p><div className="badges"><span>{item.active ? 'Ativo' : 'Inativo'}</span></div></div><div className="actions"><Button variant="secondary" onClick={() => openMenuForm(item)}>Editar</Button><Button variant="secondary" onClick={() => openDetails(item.name, [{ label: 'Preço', value: formatCurrency(item.price) }, { label: 'Status', value: item.active ? 'Ativo' : 'Inativo' }])}>Detalhes</Button><Button variant="secondary" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, menu: p.menu.map((m) => m.id === item.id ? { ...m, active: !m.active } : m) }))}>{item.active ? 'Desativar' : 'Ativar'}</Button><Button variant="danger" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, menu: p.menu.filter((m) => m.id !== item.id) }))}>Excluir</Button></div></article>)}</div>}</Section>}
+            {section === 'menu' && activeParty && <Section title="Cardápios" subtitle={activeParty.name} actions={<Button onClick={() => openMenuForm()}>Criar item</Button>}>{activeParty.menu.length === 0 ? <div className="empty-state"><strong>Nenhum item criado para esta festa</strong><p>Monte o cardápio para começar a registrar consumo.</p></div> : <div className="grid-list">{activeParty.menu.map((item) => <button className="card card-button" key={item.id} onClick={() => openMenuDetails(item.id)}><div><h3>{item.name}</h3><p>{formatCurrency(item.price)}</p><div className="badges"><span>{item.active ? 'Ativo' : 'Inativo'}</span></div></div></button>)}</div>}</Section>}
 
-            {section === 'consumption' && activeParty && <Section title="Consumo" subtitle="Registrar itens"><div className="form-inline"><select value={selectedTab} onChange={(e) => setAppData((current) => ({ ...current, selectedTabId: e.target.value || undefined }))}><option value="">Selecione a comanda</option>{activeTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.code}</option>)}</select><select value={selectedMenu} onChange={(e) => setSelectedMenu(e.target.value)}><option value="">Selecione o item</option>{activeMenu.map((item) => <option key={item.id} value={item.id}>{item.name} - {formatCurrency(item.price)}</option>)}</select><Button onClick={registerConsumption} disabled={!selectedTab || !selectedMenu}>Registrar</Button></div>{activeParty.consumptions.length === 0 ? <div className="empty-state"><strong>Nenhum consumo registrado para esta festa</strong><p>Selecione uma comanda e um item para lançar o primeiro consumo.</p></div> : <div className="grid-list">{activeParty.consumptions.map((item) => <article className="card compact" key={item.id}><div><h3>{item.itemName}</h3><p>{activeParty.tabs.find((tab) => tab.id === item.tabId)?.code} • {formatCurrency(item.price)}</p></div><Button variant="danger" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, consumptions: p.consumptions.filter((c) => c.id !== item.id) }))}>Remover</Button></article>)}</div>}</Section>}
+            {section === 'consumption' && activeParty && <Section title="Consumo" subtitle="Registrar itens"><div className="chip-list">{activeTabs.map((tab) => <Button key={tab.id} variant={selectedTab === tab.id ? 'primary' : 'secondary'} onClick={() => setAppData((current) => ({ ...current, selectedTabId: tab.id }))}>{tab.code}</Button>)}</div>{activeTabs.length === 0 && <div className="empty-state"><strong>Nenhuma comanda ativa</strong><p>Ative ou crie uma comanda para registrar consumos.</p></div>}{selectedTab && <><div className="grid-list consumption-menu">{activeMenu.map((item) => <article className="card compact" key={item.id}><div><h3>{item.name}</h3><p>{formatCurrency(item.price)}</p></div><Button onClick={() => { const menuItem = activeParty.menu.find((menu) => menu.id === item.id); if (!menuItem) return; updateParty(activeParty.id, (party) => ({ ...party, consumptions: [...party.consumptions, { id: id(), tabId: selectedTab, menuItemId: menuItem.id, itemName: menuItem.name, price: menuItem.price, createdAt: new Date().toISOString() }] })); setToast('Item registrado') }}>Registrar</Button></article>)}</div><div className="registered-toggle"><Button variant="secondary" onClick={() => setShowRegistered((value) => !value)}>{showRegistered ? 'Ocultar itens registrados' : 'Mostrar itens registrados'}</Button></div>{showRegistered && (selectedTabConsumptions.length === 0 ? <div className="empty-state"><strong>Nenhum item registrado nesta comanda</strong><p>Use o botão Registrar em um item ativo do cardápio.</p></div> : <div className="grid-list">{selectedTabConsumptions.map((item) => <article className="card compact" key={item.id}><div><h3>{item.itemName}</h3><p>{formatCurrency(item.price)}</p></div><Button variant="danger" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, consumptions: p.consumptions.filter((c) => c.id !== item.id) }))}>Remover</Button></article>)}</div>)}</>}</Section>}
 
-            {section === 'balances' && activeParty && <Section title="Saldos" subtitle="Resumo financeiro"><div className="totals"><strong>Total consumido: {formatCurrency(totals.consumed)}</strong><strong>Total a consumir: {formatCurrency(totals.minimum)}</strong></div>{activeParty.tabs.length === 0 ? <div className="empty-state"><strong>Nenhuma comanda criada para esta festa</strong><p>Crie comandas para calcular saldos.</p></div> : <div className="grid-list">{activeParty.tabs.map((tab) => { const consumed = activeParty.consumptions.filter((item) => item.tabId === tab.id).reduce((sum, item) => sum + item.price, 0); return <article className="card" key={tab.id}><div><h3>{tab.code}</h3><p>Consumido: {formatCurrency(consumed)} • Saldo restante: {formatCurrency(Math.max(tab.minimumSpend - consumed, 0))}</p></div></article> })}</div>}</Section>}
+            {section === 'balances' && activeParty && <Section title="Saldos" subtitle="Resumo financeiro"><div className="totals"><strong>Total consumido: {formatCurrency(totals.consumed)}</strong><strong>Total a consumir: {formatCurrency(totals.minimum)}</strong></div>{activeParty.tabs.length === 0 ? <div className="empty-state"><strong>Nenhuma comanda criada para esta festa</strong><p>Crie comandas para calcular saldos.</p></div> : <div className="grid-list">{activeParty.tabs.map((tab) => { const consumed = activeParty.consumptions.filter((item) => item.tabId === tab.id).reduce((sum, item) => sum + item.price, 0); const remaining = Math.max(tab.minimumSpend - consumed, 0); return <article className="card" key={tab.id}><div><h3>{tab.code}</h3><p>Consumido: {formatCurrency(consumed)} • {remaining > 0 ? `A consumir: ${formatCurrency(remaining)}` : 'Sem saldo a consumir'}</p></div></article> })}</div>}</Section>}
           </div>
         </div>
       </div>
       {toast && <div className="toast">{toast}</div>}
 
-      <Modal title={detailTitle} open={modal === 'details'} onClose={() => setModal(null)}><div className="detail-list">{detailRows.map((row) => <div key={row.label}><span>{row.label}</span><strong>{row.value}</strong></div>)}</div></Modal>
+
+      {selectedPartyDetail && <Modal title={selectedPartyDetail.name} open={modal === 'partyDetails'} onClose={() => setModal(null)}><div className="detail-list"><div><span>Nome</span><strong>{selectedPartyDetail.name}</strong></div><div><span>Data</span><strong>{formatStoredDate(selectedPartyDetail.date)}</strong></div><div><span>Observação</span><strong>{selectedPartyDetail.notes || 'Sem observações'}</strong></div><div><span>Status</span><strong>{selectedPartyDetail.active ? 'Ativa' : 'Inativa'}</strong></div></div><div className="modal-actions"><Button variant="secondary" onClick={() => openPartyForm(selectedPartyDetail)}>Editar</Button>{selectedPartyDetail.archived ? <><Button variant="secondary" onClick={() => updateParty(selectedPartyDetail.id, (p) => ({ ...p, archived: false }))}>Desarquivar</Button><Button variant="danger" onClick={() => deleteParty(selectedPartyDetail.id)}>Excluir</Button></> : <><Button variant="secondary" onClick={() => setActiveParty(selectedPartyDetail.id, !selectedPartyDetail.active)}>{selectedPartyDetail.active ? 'Desativar' : 'Ativar'}</Button><Button variant="secondary" onClick={() => updateParty(selectedPartyDetail.id, (p) => ({ ...p, archived: true, active: false }))}>Arquivar</Button></>}</div></Modal>}
+      {selectedTabDetail && activeParty && <Modal title={`Comanda ${selectedTabDetail.code}`} open={modal === 'tabDetails'} onClose={() => setModal(null)}><div className="detail-list"><div><span>Nome</span><strong>{selectedTabDetail.code}</strong></div><div><span>Mínimo</span><strong>{formatCurrency(selectedTabDetail.minimumSpend)}</strong></div><div><span>Status</span><strong>{selectedTabDetail.active ? 'Ativa' : 'Inativa'}</strong></div></div><div className="modal-actions"><Button variant="secondary" onClick={() => openTabForm(selectedTabDetail)}>Editar</Button><Button variant="secondary" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, tabs: p.tabs.map((t) => t.id === selectedTabDetail.id ? { ...t, active: !t.active } : t) }))}>{selectedTabDetail.active ? 'Desativar' : 'Ativar'}</Button><Button variant="danger" onClick={() => { updateParty(activeParty.id, (p) => ({ ...p, tabs: p.tabs.filter((t) => t.id !== selectedTabDetail.id), consumptions: p.consumptions.filter((c) => c.tabId !== selectedTabDetail.id) })); setModal(null) }}>Excluir</Button></div></Modal>}
+      {selectedMenuDetail && activeParty && <Modal title={selectedMenuDetail.name} open={modal === 'menuDetails'} onClose={() => setModal(null)}><div className="detail-list"><div><span>Nome</span><strong>{selectedMenuDetail.name}</strong></div><div><span>Preço</span><strong>{formatCurrency(selectedMenuDetail.price)}</strong></div><div><span>Status</span><strong>{selectedMenuDetail.active ? 'Ativo' : 'Inativo'}</strong></div></div><div className="modal-actions"><Button variant="secondary" onClick={() => openMenuForm(selectedMenuDetail)}>Editar</Button><Button variant="secondary" onClick={() => updateParty(activeParty.id, (p) => ({ ...p, menu: p.menu.map((m) => m.id === selectedMenuDetail.id ? { ...m, active: !m.active } : m) }))}>{selectedMenuDetail.active ? 'Desativar' : 'Ativar'}</Button><Button variant="danger" onClick={() => { updateParty(activeParty.id, (p) => ({ ...p, menu: p.menu.filter((m) => m.id !== selectedMenuDetail.id), consumptions: p.consumptions.filter((c) => c.menuItemId !== selectedMenuDetail.id) })); setModal(null) }}>Excluir</Button></div></Modal>}
 
       <Modal title={editingId ? 'Editar festa' : 'Nova festa'} open={modal === 'party'} onClose={() => setModal(null)}><form onSubmit={saveParty} className="form"><input maxLength={20} placeholder="Nome da festa" value={partyForm.name} onChange={(e) => setPartyForm({ ...partyForm, name: e.target.value })} required /><input placeholder="dd/mm/aaaa" value={partyForm.date} onChange={(e) => setPartyForm({ ...partyForm, date: e.target.value })} required />{partyForm.date && !isValidBrazilianDate(partyForm.date) && <small>Use uma data válida no formato dd/mm/aaaa.</small>}<textarea maxLength={50} placeholder="Observações" value={partyForm.notes} onChange={(e) => setPartyForm({ ...partyForm, notes: e.target.value })} /><Button type="submit">Salvar</Button></form></Modal>
       <Modal title={editingId ? 'Editar comanda' : 'Nova comanda'} open={modal === 'tab'} onClose={() => setModal(null)}><form onSubmit={saveTab} className="form"><input maxLength={20} placeholder="Nome/código da comanda" value={tabForm.code} onChange={(e) => setTabForm({ ...tabForm, code: e.target.value })} required /><input placeholder="Cartão NFC" value={tabForm.nfcCard} onChange={(e) => setTabForm({ ...tabForm, nfcCard: e.target.value })} /><input min="0" step="0.01" type="number" placeholder="Consumo mínimo" value={tabForm.minimumSpend} onChange={(e) => setTabForm({ ...tabForm, minimumSpend: Number(e.target.value) })} /><Button type="submit">Salvar</Button></form></Modal>
