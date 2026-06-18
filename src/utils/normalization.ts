@@ -22,7 +22,12 @@ function numberOrZero(value: unknown) {
 }
 
 export function sortParties(parties: Party[]) {
-  return [...parties].sort((a, b) => Number(a.archived) - Number(b.archived) || b.date.localeCompare(a.date) || collator.compare(a.name, b.name))
+  return [...parties].sort((a, b) => {
+    if (a.archived !== b.archived) return Number(a.archived) - Number(b.archived)
+
+    const dateOrder = a.archived ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
+    return dateOrder || collator.compare(a.name, b.name)
+  })
 }
 
 export function sortTabs(tabs: Tab[]) {
