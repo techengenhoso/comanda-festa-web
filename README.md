@@ -1,75 +1,41 @@
-# My Web
+# Controle de Festa
 
-## React + TypeScript + Vite
+Aplicação web em React, TypeScript e Vite para controlar festas, comandas, cardápio, consumos e saldos mínimos. O projeto é uma conversão definitiva para site web e não depende de Expo ou React Native.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## O que o projeto faz
 
-Currently, two official plugins are available:
+- Cria e gerencia festas com data no formato `dd/mm/aaaa`.
+- Mantém uma única festa ativa por vez.
+- Cadastra comandas e itens do cardápio por festa.
+- Registra consumos somente quando há festa, comanda e item ativos.
+- Calcula total consumido e valor restante para atingir o consumo mínimo.
+- Atualiza consumos antigos quando um item do cardápio é editado.
+- Remove consumos relacionados ao excluir uma comanda ou item.
+- Arquiva automaticamente festas com mais de 15 dias.
+- Persiste os dados no navegador para sobreviver a recarregamentos da página.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Como instalar
 
-### React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-### Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Como rodar em desenvolvimento
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Depois abra a URL exibida pelo Vite no terminal, normalmente `http://localhost:5173`.
+
+## Como gerar build de produção
+
+```bash
+npm run build
+```
+
+Os arquivos finais são gerados em `dist/`.
+
+## Onde os dados ficam salvos
+
+Os dados são salvos no `localStorage` do navegador, usando a chave `party-control:v2`. Como o armazenamento é local ao navegador/dispositivo, limpar os dados do site ou trocar de navegador remove o histórico salvo naquele ambiente.
