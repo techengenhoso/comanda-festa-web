@@ -9,6 +9,7 @@
     "ignoreUnknown": false,
     "includes": [
       "**/*.ts",
+      "**/*.tsx",
       "**/*.js",
       "**/*.json",
       "!dist",
@@ -28,6 +29,9 @@
       "preset": "recommended",
       "style": {
         "useImportType": "off"
+      },
+      "a11y": {
+        "noStaticElementInteractions": "off"
       },
       "complexity": {
         "noExcessiveCognitiveComplexity": "error"
