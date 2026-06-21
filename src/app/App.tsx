@@ -472,12 +472,14 @@ function App() {
 					<h1>Controle Festa</h1>
 					<p>{activePartyHeader}</p>
 				</header>
+
 				<div className="layout">
 					<Nav
 						current={section}
 						disabled={!activeParty}
 						onChange={setSection}
 					/>
+
 					<div className="content">
 						{section === "parties" && (
 							<PartiesPage
@@ -492,6 +494,7 @@ function App() {
 								}}
 							/>
 						)}
+
 						{section === "tabs" && activeParty && (
 							<TabsPage
 								party={activeParty}
@@ -502,6 +505,7 @@ function App() {
 								}}
 							/>
 						)}
+
 						{section === "menu" && activeParty && (
 							<MenuPage
 								party={activeParty}
@@ -512,6 +516,7 @@ function App() {
 								}}
 							/>
 						)}
+
 						{section === "consumption" && activeParty && (
 							<ConsumptionPage
 								activeMenu={activeMenu}
@@ -532,6 +537,7 @@ function App() {
 								onToggleRegistered={() => setShowRegistered((value) => !value)}
 							/>
 						)}
+
 						{section === "balances" && activeParty && (
 							<BalancesPage
 								party={activeParty}
@@ -542,7 +548,9 @@ function App() {
 					</div>
 				</div>
 			</div>
+
 			{toast && <div className="toast">{toast}</div>}
+
 			<EntityDetails
 				modal={modal}
 				partyDetail={selectedPartyDetail}
@@ -561,6 +569,7 @@ function App() {
 				onToggleTab={toggleTabActive}
 				onUnarchiveParty={unarchiveParty}
 			/>
+
 			<EntityForms
 				editingId={editingId}
 				modal={modal}

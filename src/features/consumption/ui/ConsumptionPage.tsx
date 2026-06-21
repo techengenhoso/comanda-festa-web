@@ -1,6 +1,7 @@
 import { Button } from "../../../shared/ui/Button";
 import { Section } from "../../../shared/ui/Section";
 import { formatCurrency } from "../../../shared/utils/currency";
+import { formatStoredDateTime } from "../../../shared/utils/date";
 import type { Consumption, MenuItem, Tab } from "../../party/model/types";
 
 type ConsumptionPageProps = {
@@ -51,7 +52,7 @@ export function ConsumptionPage({
 					</div>
 					{selectedActiveTab && (
 						<>
-							<div className="grid-list consumption-menu">
+							<div className="grid-list">
 								{activeMenu.map((item) => (
 									<article className="card compact" key={item.id}>
 										<div>
@@ -65,21 +66,23 @@ export function ConsumptionPage({
 								))}
 							</div>
 
-							<div className="toggle-panel">
-								<Button variant="secondary" onClick={onToggleRegistered}>
-									{showRegistered
-										? "Ocultar itens registrado"
-										: "Mostrar itens registrado"}
-								</Button>
+							{selectedTabConsumptions.length > 0 && (
+								<div className="toggle-panel">
+									<Button variant="secondary" onClick={onToggleRegistered}>
+										{showRegistered
+											? "Ocultar itens registrado"
+											: "Mostrar itens registrado"}
+									</Button>
 
-								{showRegistered && selectedTabConsumptions.length > 0 && (
-									<div className="grid-list">
+									{showRegistered && (
+										<div className="grid-list">
 										{selectedTabConsumptions.map((item) => (
 											<article className="card compact" key={item.id}>
-												<div>
-													<h3>{item.itemName}</h3>
-													<p>{formatCurrency(item.price)}</p>
+												<div className="consumoRegis">
+                          <h3>{item.itemName}</h3>
+													<p>{formatStoredDateTime(item.createdAt)}</p>
 												</div>
+
 												<Button
 													variant="danger"
 													onClick={() => onDeleteConsumption(item.id)}
@@ -88,9 +91,10 @@ export function ConsumptionPage({
 												</Button>
 											</article>
 										))}
-									</div>
-								)}
-							</div>
+										</div>
+									)}
+								</div>
+							)}
 						</>
 					)}
 				</>
